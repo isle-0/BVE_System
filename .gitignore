@@ -41,7 +41,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-output/
-*.jpg
-*.png
-*.jpeg 
+# output/
+# *.jpg
+# *.png
+# *.jpeg 
