@@ -96,7 +96,7 @@ class DepthEstimator:
         depth_norm = (depth_clipped - min_val) / (max_val - min_val)
         
         # 映射到0.5-3米范围（更适合近场场景）
-        depth_meters = 0.5 + depth_norm * 2.5
+        depth_meters = 0.5 + depth_norm * 3.5
         
         print(f"[DEBUG] 最终深度图范围: {depth_meters.min():.2f}m ~ {depth_meters.max():.2f}m")
         
@@ -136,38 +136,34 @@ class DepthEstimator:
         
         return depth_vis
         
-    def get_3d_points(self, image: np.ndarray, depth_map: np.ndarray, 
-                     camera_matrix: np.ndarray) -> np.ndarray:
+    def get_3d_points(self, depth_map: np.ndarray, camera_height: float) -> np.ndarray:
         """
-        将深度图转换为3D点云
-        
+        将深度图转换为3D点云（适用于全景 equirectangular 图像）
+
         Args:
-            image: 输入图像
-            depth_map: 深度图
-            camera_matrix: 相机内参矩阵
-            
+            depth_map: 深度图 (单位米)
+            camera_height: 相机安装高度（米）
+
         Returns:
-            points_3d: Nx3的3D点云数组
+            points_3d: Nx4 的地面平面点云 (X: 横向, Z: 前向, row: 像素行, col: 像素列)
         """
-        height, width = depth_map.shape
-        fx = camera_matrix[0, 0]
-        fy = camera_matrix[1, 1]
-        cx = camera_matrix[0, 2]
-        cy = camera_matrix[1, 2]
-        
-        # 创建像素坐标网格
-        y, x = np.mgrid[0:height, 0:width]
-        
-        # 计算3D坐标
-        Z = depth_map
-        X = (x - cx) * Z / fx
-        Y = (y - cy) * Z / fy
-        
-        # 将坐标堆叠成Nx3数组
-        points_3d = np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=1)
-        
-        # 移除无效点（深度为0或无穷大的点）
-        valid_mask = ~np.isnan(points_3d).any(axis=1) & ~np.isinf(points_3d).any(axis=1)
-        points_3d = points_3d[valid_mask]
-        
-        return points_3d 
+        import math
+        h, w = depth_map.shape
+        pts = []
+        # 对每个像素按球面映射计算射线方向，再和地面 (y = -camera_height) 求交点
+        for i in range(h):
+            phi = (0.5 - (i + 0.5) / h) * math.pi  # 垂直角 φ ∈ [-π/2, π/2]
+            for j in range(w):
+                theta = (((j + 0.5) / w) - 0.5) * 2 * math.pi  # 水平角 θ ∈ [-π, π]
+                dx = math.cos(phi) * math.sin(theta)
+                dy = math.sin(phi)
+                dz = math.cos(phi) * math.cos(theta)
+                if dy >= 0:
+                    continue  # 朝上不交地面
+                t = -camera_height / dy
+                x = dx * t
+                z = dz * t
+                pts.append([x, z, i, j])
+        if not pts:
+            return np.zeros((0, 4), dtype=np.float32)
+        return np.array(pts, dtype=np.float32)

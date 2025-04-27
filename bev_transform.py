@@ -49,162 +49,33 @@ class BEVTransformer:
         
         return transform_matrix
         
-    def image_to_bev(self, image: np.ndarray, depth_map: np.ndarray,
-                     bev_size: Tuple[int, int],
-                     bev_range: Tuple[float, float, float, float]) -> np.ndarray:
+    def image_to_bev(self,
+                     panorama: np.ndarray,
+                     points_2d: np.ndarray,
+                     bev_size: Tuple[int,int],
+                     bev_range: Tuple[float,float,float,float]) -> np.ndarray:
         """
-        将图像和深度图转换为鸟瞰图
-        
+        将地面点云投影到鸟瞰图（BEV）
         Args:
-            image: 输入图像
-            depth_map: 深度图 (归一化到0-1范围)
-            bev_size: 鸟瞰图大小 (width, height)
-            bev_range: 鸟瞰图范围 (x_min, x_max, y_min, y_max) 单位：米
-            
+            panorama: 原始全景图，用于采样颜色
+            points_2d: Nx4 数组 (X, Z, row, col)
+            bev_size: (width, height) 输出BEV图尺寸
+            bev_range: (x_min, x_max, z_min, z_max) 地面坐标范围，单位：米
         Returns:
-            bev_image: 鸟瞰图
+            bev_image: BEV鸟瞰图
         """
-        # 打印输入参数以便调试
-        print(f"输入图像尺寸: {image.shape}")
-        print(f"深度图尺寸: {depth_map.shape}")
-        print(f"鸟瞰图尺寸: {bev_size}")
-        print(f"鸟瞰图范围: {bev_range}")
-        
-        # 检查图像和深度图尺寸是否匹配
-        if image.shape[:2] != depth_map.shape:
-            print(f"警告: 图像尺寸 {image.shape[:2]} 与深度图尺寸 {depth_map.shape} 不匹配")
-            # 调整深度图大小以匹配图像
-            depth_map = cv2.resize(depth_map, (image.shape[1], image.shape[0]))
-            print(f"已调整深度图尺寸为: {depth_map.shape}")
-        
-        # 创建鸟瞰图画布
-        bev_image = np.zeros((bev_size[1], bev_size[0], 3), dtype=np.uint8)
-        
-        # 计算像素到米的转换比例
-        x_scale = bev_size[0] / (bev_range[1] - bev_range[0])
-        y_scale = bev_size[1] / (bev_range[3] - bev_range[2])
-        
-        # 获取图像尺寸
-        h, w = image.shape[:2]
-        
-        # 创建网格点
-        y_coords, x_coords = np.mgrid[0:h, 0:w].reshape(2, -1)
-        
-        # 限制处理点的数量，避免内存问题
-        max_points = 100000
-        if len(x_coords) > max_points:
-            # 随机采样点
-            indices = np.random.choice(len(x_coords), max_points, replace=False)
-            x_coords = x_coords[indices]
-            y_coords = y_coords[indices]
-            print(f"随机采样 {max_points} 个点进行处理")
-        
-        # 获取这些点的深度值
-        depths = depth_map[y_coords, x_coords]
-        
-        # 打印深度值的基本统计信息
-        print(f"深度值最小值: {depths.min()}, 最大值: {depths.max()}, 平均值: {depths.mean()}")
-        
-        # 如果深度图几乎全黑，使用基于图像位置的估计深度
-        if depths.max() < 0.01:  # 如果最大深度值小于0.01
-            print("警告: 深度图几乎全黑，使用基于图像位置的估计深度")
-            # 使用基于图像位置的估计深度
-            # 假设远处的点深度更大
-            depths = 0.1 + 0.9 * (y_coords / h)  # 从0.1到1.0的深度值
-        
-        # 过滤掉深度为0的点
-        valid_indices = depths > 0
-        x_coords = x_coords[valid_indices]
-        y_coords = y_coords[valid_indices]
-        depths = depths[valid_indices]
-        
-        if len(depths) == 0:
-            print("警告: 没有有效的深度值，使用简单的投影方法")
-            return self.simple_projection(image, bev_size, bev_range)
-        
-        # 计算3D点坐标
-        # 使用相机内参矩阵将2D像素坐标转换为3D点
-        fx = self.camera_matrix[0, 0]
-        fy = self.camera_matrix[1, 1]
-        cx = self.camera_matrix[0, 2]
-        cy = self.camera_matrix[1, 2]
-        
-        # 计算相对于相机的3D坐标
-        X = (x_coords - cx) * depths / fx
-        Y = (y_coords - cy) * depths / fy
-        Z = depths
-        
-        # 打印3D坐标范围以便调试
-        print(f"[DEBUG] X范围: {X.min():.2f} ~ {X.max():.2f}")
-        print(f"[DEBUG] Z范围: {Z.min():.2f} ~ {Z.max():.2f}")
-        print(f"[DEBUG] BEV X范围: {bev_range[0]} ~ {bev_range[1]}")
-        print(f"[DEBUG] BEV Y范围: {bev_range[2]} ~ {bev_range[3]}")
-        
-        # 计算鸟瞰图坐标 - 使用正确的坐标映射方式
-        # 使用bev_range进行坐标映射，而不是硬加中心偏移量
-        bev_x = (X - bev_range[0]) * x_scale
-        bev_y = (Z - bev_range[2]) * y_scale
-        
-        # 过滤掉超出鸟瞰图范围的点
-        valid_indices = (bev_x >= 0) & (bev_x < bev_size[0]) & (bev_y >= 0) & (bev_y < bev_size[1])
-        bev_x = bev_x[valid_indices]
-        bev_y = bev_y[valid_indices]
-        x_coords = x_coords[valid_indices]
-        y_coords = y_coords[valid_indices]
-        
-        if len(bev_x) == 0:
-            print("警告: 没有点落在鸟瞰图范围内，尝试放宽范围")
-            # 尝试放宽范围
-            expanded_range = (
-                bev_range[0] - 5,  # 左侧扩展5米
-                bev_range[1] + 5,  # 右侧扩展5米
-                bev_range[2],      # 前方不变
-                bev_range[3] + 10  # 前方扩展10米
-            )
-            print(f"尝试使用扩展范围: {expanded_range}")
-            
-            # 重新计算比例
-            x_scale = bev_size[0] / (expanded_range[1] - expanded_range[0])
-            y_scale = bev_size[1] / (expanded_range[3] - expanded_range[2])
-            
-            # 重新计算坐标
-            bev_x = (X - expanded_range[0]) * x_scale
-            bev_y = (Z - expanded_range[2]) * y_scale
-            
-            # 再次过滤
-            valid_indices = (bev_x >= 0) & (bev_x < bev_size[0]) & (bev_y >= 0) & (bev_y < bev_size[1])
-            bev_x = bev_x[valid_indices]
-            bev_y = bev_y[valid_indices]
-            x_coords = x_coords[valid_indices]
-            y_coords = y_coords[valid_indices]
-            
-            if len(bev_x) == 0:
-                print("警告: 即使放宽范围后仍然没有点落在鸟瞰图范围内，使用简单的投影方法")
-                return self.simple_projection(image, bev_size, bev_range)
-        
-        # 将坐标转换为整数
-        bev_x = bev_x.astype(np.int32)
-        bev_y = bev_y.astype(np.int32)
-        
-        # 获取对应点的颜色
-        colors = image[y_coords, x_coords]
-        
-        # 绘制点到鸟瞰图
-        for i in range(len(bev_x)):
-            # 确保坐标在有效范围内
-            if 0 <= bev_x[i] < bev_size[0] and 0 <= bev_y[i] < bev_size[1]:
-                bev_image[bev_y[i], bev_x[i]] = colors[i]
-        
-        # 如果鸟瞰图几乎全黑，使用简单的投影方法
-        if np.sum(bev_image) < 1000:  # 如果图像中非零像素很少
-            print("警告: 鸟瞰图几乎全黑，使用简单的投影方法")
-            return self.simple_projection(image, bev_size, bev_range)
-        
-        # 添加网格
-        self._add_grid(bev_image)
-        
-        return bev_image
+        bev_w, bev_h = bev_size
+        x_min, x_max, z_min, z_max = bev_range
+        bev = np.zeros((bev_h, bev_w, 3), dtype=panorama.dtype)
+        for x, z, i, j in points_2d:
+            if x_min <= x <= x_max and z_min <= z <= z_max:
+                u = int((x - x_min) / (x_max - x_min) * (bev_w - 1))
+                v = int((1 - (z - z_min) / (z_max - z_min)) * (bev_h - 1))
+                color = panorama[int(i), int(j)]
+                bev[v, u] = color
+        return bev
     
+
     def simple_projection(self, image: np.ndarray, bev_size: Tuple[int, int],
                          bev_range: Tuple[float, float, float, float]) -> np.ndarray:
         """

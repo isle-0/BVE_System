@@ -4,33 +4,34 @@ from typing import List, Tuple
 
 class PanoramaStitcher:
     def __init__(self):
-        self.stitcher = cv2.Stitcher.create(cv2.Stitcher_PANORAMA)
-        
+        self.stitcher = cv2.Stitcher_create()
+
     def stitch_images(self, images: List[np.ndarray]) -> Tuple[bool, np.ndarray]:
         """
-        将多张图像拼接成全景图
-        
-        Args:
-            images: 输入图像列表
-            
-        Returns:
-            success: 是否成功
-            panorama: 拼接后的全景图
+        一次性批量拼接所有图像（先强制下采样，再 batch-stitch），
+        捕获拼接异常，避免挂起或崩溃。
         """
         if len(images) < 2:
-            raise ValueError("需要至少两张图像进行拼接")
-            
-        # 确保所有图像具有相同的大小
-        target_size = (images[0].shape[1], images[0].shape[0])
-        resized_images = [cv2.resize(img, target_size) for img in images]
-        
-        # 执行图像拼接
-        status, panorama = self.stitcher.stitch(resized_images)
-        
-        if status == cv2.Stitcher_OK:
-            return True, panorama
-        else:
+            raise ValueError("至少需要两张图像才能拼接")
+            # 1. 下采样：最大宽度 800px
+        resized = []
+        for img in images:
+            h, w = img.shape[:2]
+            if w > 800:
+                scale = 800.0 / w
+                img = cv2.resize(img, (800, int(h * scale)), interpolation=cv2.INTER_AREA)
+            # 确保 uint8
+            resized.append(img.astype(np.uint8))
+        # 2. 执行拼接并捕获异常
+        try:
+            status, pano = self.stitcher.stitch(resized)
+        except cv2.error as e:
+            print(f"拼接异常: {e}")
             return False, None
+        if status != cv2.Stitcher_OK or pano is None:
+            print(f"拼接未成功，状态码 {status}")
+            return False, None
+        return True, pano
             
     def get_homography(self, img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
         """

@@ -50,8 +50,9 @@ def main():
     parser.add_argument('--camera_matrix', type=str, help='相机内参矩阵文件路径')
     parser.add_argument('--camera_height', type=float, default=1.5, help='相机安装高度（米）')
     parser.add_argument('--debug', action='store_true', help='启用调试模式')
-    parser.add_argument('--bev_range', type=float, nargs=4, default=[-2, 2, 0, 4],
-                      help='鸟瞰图范围 [x_min x_max y_min y_max]，单位：米')
+    parser.add_argument('--bev_range', type=float, nargs=4,
+                        default=[-2, 2, -2, 2],
+                        help='鸟瞰图范围 [x_min x_max z_min z_max]，单位：米。推荐 [-R, R, -R, R] 来覆盖全 360°')
     args = parser.parse_args()
     
     # 创建输出目录
@@ -115,8 +116,9 @@ def main():
     
     # 生成鸟瞰图
     print("正在生成鸟瞰图...")
-    bev_size = (800, 800)  # 鸟瞰图大小
-    bev_image = bev_transformer.image_to_bev(panorama, depth_map, bev_size, bev_range)
+    bev_size = (1200, 1200)  # 鸟瞰图大小
+    points_2d = depth_estimator.get_3d_points(depth_map, args.camera_height)
+    bev_image = bev_transformer.image_to_bev(panorama, points_2d, bev_size, bev_range)
     
     # 保存鸟瞰图
     bev_path = os.path.join(args.output_dir, 'bev_image.jpg')
@@ -126,4 +128,4 @@ def main():
     print("处理完成！")
 
 if __name__ == '__main__':
-    main() 
+    main()
