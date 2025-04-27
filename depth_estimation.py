@@ -50,9 +50,9 @@ class DepthEstimator:
             image: Input image (BGR format)
             
         Returns:
-            depth_map: 深度图 ( 单位：米)
+            depth_map: Depth map (unit: meters)
         """
-        # 转换为RGB
+        # Convert to RGB
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
         # 转换为PIL图像
@@ -119,16 +119,16 @@ class DepthEstimator:
     
     def visualize_depth(self, depth_map: np.ndarray, colormap: int = cv2.COLORMAP_JET) -> np.ndarray:
         """
-        将深度图可视化为彩色图像
+        Visualize the depth map as a colored image
         
         Args:
-            depth_map: 深度图 (归一化到0-1范围)
-            colormap: OpenCV颜色映射
+            depth_map: Depth map (normalized to 0-1 range)
+            colormap: OpenCV color mapping
             
         Returns:
-            depth_vis: 可视化的深度图
+            depth_vis: Visualized depth map
         """
-        # 将深度图转换为8位无符号整数
+        # Convert the depth map to an 8-bit unsigned integer
         depth_vis = (depth_map * 255).astype(np.uint8)
         
         # 应用颜色映射
@@ -145,7 +145,7 @@ class DepthEstimator:
             camera_height: Camera installation height (meters)
 
         Returns:
-            points_3d: Nx4 的地面平面点云 (X: 横向  , Z: 前向, row: 像素行, col: 像素列)
+            points_3d: Nx4 ground plane point cloud (X: lateral, Z: forward, row: pixel row, col: pixel column)
         """
         import math
         h, w = depth_map.shape
