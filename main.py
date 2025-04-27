@@ -2,6 +2,8 @@ import argparse
 import os
 import cv2
 import numpy as np
+
+from object_detection import ObjectDetector
 from panorama import PanoramaStitcher
 from depth_estimation import DepthEstimator
 from bev_transform import BEVTransformer
@@ -113,7 +115,7 @@ def main():
     # 设置鸟瞰图范围
     bev_range = tuple(args.bev_range)
     print(f"使用鸟瞰图范围: {bev_range}")
-    
+
     # 生成鸟瞰图
     print("正在生成鸟瞰图...")
     bev_size = (1200, 1200)  # 鸟瞰图大小
@@ -124,7 +126,68 @@ def main():
     bev_path = os.path.join(args.output_dir, 'bev_image.jpg')
     cv2.imwrite(bev_path, bev_image)
     print(f"已保存鸟瞰图: {bev_path}")
-    
+
+    # ===== 检测行人和车辆 =====
+    print("正在检测全景图中的对象...")
+    detector = ObjectDetector()
+    boxes, labels, scores = detector.detect(panorama)
+
+    # 在panorama上画框
+    for box, label_idx, score in zip(boxes, labels, scores):
+        label = detector.COCO_INSTANCE_CATEGORY_NAMES[label_idx]
+        # 只画person和car
+        if label == 'person':
+            color = (0, 0, 255)  # 红色框 - person
+        elif label == 'car':
+            color = (0, 255, 0)  # 绿色框 - car
+        else:
+            continue  # 其他类别跳过
+        x1, y1, x2, y2 = box.astype(int)
+        cv2.rectangle(panorama, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(panorama, label, (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+
+    # 保存标注后的panorama
+    annotated_path = os.path.join(args.output_dir, 'panorama_with_objects.jpg')
+    cv2.imwrite(annotated_path, panorama)
+    print(f"已保存标注后的全景图: {annotated_path}")
+
+    # ===== 获取3D位置，投影到BEV，并标到BEV上 =====
+    print("正在估计目标在BEV图上的位置...")
+    object_positions = detector.get_object_positions(boxes, labels, scores, depth_map, camera_matrix)
+    # 筛选person和car，并且组装好给visualizer用的数据格式
+    bev_objects = {}
+    for name, info in object_positions.items():
+        if name.startswith('person') or name.startswith('car'):
+            bev_objects[name] = info
+
+    # 位置转换到BEV坐标系
+    position_only = {k: v['position'] for k, v in bev_objects.items()}
+    bev_positions = bev_transformer.project_objects_to_bev(position_only, bev_size, bev_range)
+
+    # 把位置映射回来给BEVVisualizer
+    for k, (bev_x, bev_y) in bev_positions.items():
+        bev_objects[k]['position'] = (int(bev_x), int(bev_y))
+
+    # 用BEVVisualizer来画目标
+    # visualizer = BEVVisualizer()
+    # bev_annotated = visualizer.draw_bev_map(bev_image, bev_objects)
+    # 自己画标注
+    bev_annotated = bev_image.copy()
+    for name, info in bev_objects.items():
+        x, y = info['position']
+        if 'person' in name:
+            color = (0, 0, 255)  # 红色，注意OpenCV是BGR
+            cv2.circle(bev_annotated, (x, y), radius=5, color=color, thickness=-1)
+        elif 'car' in name:
+            color = (0, 255, 0)  # 绿色
+            cv2.rectangle(bev_annotated, (x - 5, y - 5), (x + 5, y + 5), color, thickness=-1)
+
+    # 保存带目标标注的BEV图
+    bev_output_path = os.path.join(args.output_dir, 'bev_image_with_objects.jpg')
+    cv2.imwrite(bev_output_path, bev_annotated)
+    print(f"已保存标注后的鸟瞰图: {bev_output_path}")
+
     print("处理完成！")
 
 if __name__ == '__main__':

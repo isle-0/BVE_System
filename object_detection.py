@@ -4,11 +4,12 @@ from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
 from torchvision.transforms import functional as F
 import numpy as np
 import cv2
+from torchvision.models.detection import FasterRCNN_ResNet50_FPN_V2_Weights
 
 class ObjectDetector:
     def __init__(self, confidence_threshold=0.5):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = fasterrcnn_resnet50_fpn_v2(pretrained=True)
+        self.model = fasterrcnn_resnet50_fpn_v2(weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT)
         self.model.to(self.device)
         self.model.eval()
         self.confidence_threshold = confidence_threshold
@@ -64,7 +65,8 @@ class ObjectDetector:
         
         return boxes, labels, scores
         
-    def get_object_positions(self, boxes: np.ndarray, depth_map: np.ndarray,
+    def get_object_positions(self, boxes: np.ndarray, labels: np.ndarray,
+                          scores: np.ndarray, depth_map: np.ndarray,
                            camera_matrix: np.ndarray) -> dict:
         """
         计算检测到的目标的3D位置
@@ -79,7 +81,7 @@ class ObjectDetector:
         """
         object_positions = {}
         
-        for i, box in enumerate(boxes):
+        for idx, (box, label_idx, score) in enumerate(zip(boxes, labels, scores)):
             x1, y1, x2, y2 = box.astype(int)
             
             # 获取目标区域的平均深度
@@ -97,10 +99,12 @@ class ObjectDetector:
             X = (center_x - cx) * object_depth / fx
             Y = (center_y - cy) * object_depth / fy
             Z = object_depth
-            
-            object_positions[self.COCO_INSTANCE_CATEGORY_NAMES[labels[i]]] = {
+
+            label_name = self.COCO_INSTANCE_CATEGORY_NAMES[label_idx]
+            object_id = f"{label_name}_{idx}"  # 加编号，防止同名覆盖
+            object_positions[object_id] = {
                 'position': np.array([X, Y, Z]),
-                'confidence': scores[i]
+                'confidence': score
             }
             
-        return object_positions 
+        return object_positions
