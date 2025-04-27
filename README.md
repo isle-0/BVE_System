@@ -16,7 +16,7 @@ Modern approaches predominantly rely on deep learning models, such as Convolutio
 The accuracy of this depth estimation step directly dictates the geometric fidelity of the final BEV map. Errors in predicted depth values will cause objects and structures to be misplaced along the viewing ray when projected into 3D, resulting in incorrect positioning in the BEV output. Furthermore, because monocular vision lacks an inherent metric scale reference, the depth predicted by DFT is often relative. To generate a BEV map in meaningful metric units (e.g., meters), which is necessary for planning and navigation, the system must incorporate a mechanism to resolve this scale ambiguity. This could involve using known parameters like camera height above the ground, leveraging learned object size priors, or integrating information from other sources like visual odometry.
 
 *   **Object Detection and Tracking:** 
-Object detection serves to identify and locate relevant entities within the scene, such as vehicles, pedestrians, cyclists, and traffic signs. This provides crucial semantic context to the geometric representation.
+Object detection serves to identify and locate relevant entities within the scene, such as vehicles and pedestrians. This provides crucial semantic context to the geometric representation.
 
 This task is typically accomplished using deep learning-based object detectors. Models like YOLO (You Only Look Once), Faster R-CNN, or DETR are trained on extensive datasets (e.g., COCO, KITTI, nuScenes) annotated with bounding boxes and class labels for various object categories. This project employs the Faster R-CNN model with ResNet-50 backbone and FPN, a popular choice known for its excellent balance of speed and accuracy, making it suitable for real-time or near-real-time applications.
 
@@ -64,7 +64,6 @@ The system consists of the following core modules:
     *   Provides various visualization tools.
     *   Supports visualization of depth maps and object detection results.
     *   Generates visualization effects for the BEV map.
-    *   Offers an interactive visualization interface (potential feature).
 
 ## Installation
 
