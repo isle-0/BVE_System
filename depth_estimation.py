@@ -9,48 +9,48 @@ import os
 class DepthEstimator:
     def __init__(self, model_name: str = "Intel/dpt-large"):
         """
-        初始化深度估计器
+        Initialize the depth estimator
         
         Args:
-            model_name: MiDaS模型名称
+            model_name: DPT model name, default using Intel/dpt-large
         """
-        print(f"正在加载MiDaS模型: {model_name}")
-        # 加载MiDaS模型和特征提取器
+        print(f"Loading DPT model: {model_name}")
+        # 加载DPT模型和特征提取器
         self.feature_extractor = DPTFeatureExtractor.from_pretrained(model_name)
         self.model = DPTForDepthEstimation.from_pretrained(model_name)
         
         # 如果有GPU则使用GPU
         if torch.cuda.is_available():
-            print("使用GPU进行深度估计")
+            print("Using GPU for depth estimation")
             self.model = self.model.to("cuda")
         else:
-            print("使用CPU进行深度估计")
+            print("Using CPU for depth estimation")
         
         # 设置为评估模式
         self.model.eval()
-        print("MiDaS模型加载完成")
+        print("DPT model loaded successfully")
     
     def estimate_depth(self, image: np.ndarray) -> np.ndarray:
         """
-        估计图像的深度图
+        Estimate the depth map of the image
         
         Args:
-            image: 输入图像 (BGR格式)
+            image: Input image (BGR format)
             
         Returns:
-            depth_map: 深度图 (归一化到0-1范围)
+            depth_map: Depth map (unit: meters)
         """
-        return self.midas_depth_estimation(image)
+        return self.dpt_depth_estimation(image)
     
-    def midas_depth_estimation(self, image: np.ndarray) -> np.ndarray:
+    def dpt_depth_estimation(self, image: np.ndarray) -> np.ndarray:
         """
-        使用MiDaS模型估计深度图
+        Use the DPT model to estimate the depth map
         
         Args:
-            image: 输入图像 (BGR格式)
+            image: Input image (BGR format)
             
         Returns:
-            depth_map: 深度图 (归一化到0-1范围)
+            depth_map: 深度图 ( 单位：米)
         """
         # 转换为RGB
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -66,7 +66,7 @@ class DepthEstimator:
             inputs = {k: v.to("cuda") for k, v in inputs.items()}
         
         # 打印原始图像尺寸
-        print(f"[DEBUG] 原始图像尺寸: {image.shape}")
+        print(f"[DEBUG] Original image size: {image.shape}")
         
         # 推理
         with torch.no_grad():
@@ -83,13 +83,13 @@ class DepthEstimator:
         depth_raw = prediction.squeeze().cpu().numpy()
         
         # 打印原始深度值统计
-        print(f"[DEBUG] 原始深度图最小值: {depth_raw.min():.2f}, 最大值: {depth_raw.max():.2f}, 平均值: {depth_raw.mean():.2f}")
+        print(f"[DEBUG] Raw depth map - min: {depth_raw.min():.2f}, max: {depth_raw.max():.2f}, mean: {depth_raw.mean():.2f}")
         
         # 使用分位数进行归一化
         min_val = np.percentile(depth_raw, 2)  # 2%分位数
         max_val = np.percentile(depth_raw, 98)  # 98%分位数
         
-        print(f"[DEBUG] 自适应深度映射范围: {min_val:.2f} ~ {max_val:.2f}")
+        print(f"[DEBUG] Adaptive depth mapping range: {min_val:.2f} ~ {max_val:.2f}")
         
         # 裁剪和归一化
         depth_clipped = np.clip(depth_raw, min_val, max_val)
@@ -98,7 +98,7 @@ class DepthEstimator:
         # 映射到0.5-3米范围（更适合近场场景）
         depth_meters = 0.5 + depth_norm * 3.5
         
-        print(f"[DEBUG] 最终深度图范围: {depth_meters.min():.2f}m ~ {depth_meters.max():.2f}m")
+        print(f"[DEBUG] Final depth map range: {depth_meters.min():.2f}m ~ {depth_meters.max():.2f}m")
         
         # 保存深度分布直方图
         try:
@@ -107,13 +107,13 @@ class DepthEstimator:
             plt.hist(depth_raw.flatten(), bins=100, color='skyblue')
             plt.axvline(min_val, color='red', linestyle='--', label='2% cutoff')
             plt.axvline(max_val, color='green', linestyle='--', label='98% cutoff')
-            plt.title("Raw MiDaS Depth Distribution")
+            plt.title("Raw DPT Depth Distribution")
             plt.legend()
             plt.savefig("depth_histogram.png")
             plt.close()
-            print("[DEBUG] 已保存深度分布直方图: depth_histogram.png")
+            print("[DEBUG] Depth distribution histogram saved: depth_histogram.png")
         except Exception as e:
-            print(f"[DEBUG] 保存深度分布直方图失败: {str(e)}")
+            print(f"[DEBUG] Failed to save depth distribution histogram: {str(e)}")
         
         return depth_meters
     
@@ -138,14 +138,14 @@ class DepthEstimator:
         
     def get_3d_points(self, depth_map: np.ndarray, camera_height: float) -> np.ndarray:
         """
-        将深度图转换为3D点云（适用于全景 equirectangular 图像）
+        Convert the depth map to a 3D point cloud (suitable for panoramic equirectangular images)
 
         Args:
-            depth_map: 深度图 (单位米)
-            camera_height: 相机安装高度（米）
+            depth_map: Depth map (unit: meters)
+            camera_height: Camera installation height (meters)
 
         Returns:
-            points_3d: Nx4 的地面平面点云 (X: 横向, Z: 前向, row: 像素行, col: 像素列)
+            points_3d: Nx4 的地面平面点云 (X: 横向  , Z: 前向, row: 像素行, col: 像素列)
         """
         import math
         h, w = depth_map.shape

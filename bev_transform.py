@@ -5,42 +5,42 @@ from typing import Tuple, List
 class BEVTransformer:
     def __init__(self, camera_matrix: np.ndarray, camera_height: float):
         """
-        初始化鸟瞰图转换器
+        Initialize the BEV transformer
         
         Args:
-            camera_matrix: 相机内参矩阵 (3x3)
-            camera_height: 相机安装高度（米）
+            camera_matrix: Camera intrinsic matrix (3x3)
+            camera_height: Camera installation height (meters)
         """
         self.camera_matrix = camera_matrix
         self.camera_height = camera_height
         
-        # 打印相机参数以便调试
-        print(f"相机内参矩阵:\n{camera_matrix}")
-        print(f"相机高度: {camera_height}米")
+        # Print camera parameters for debugging
+        print(f"Camera intrinsic matrix:\n{camera_matrix}")
+        print(f"Camera height: {camera_height} meters")
         
     def compute_bev_transform(self, image_size: tuple, bev_size: tuple,
                             bev_range: tuple) -> np.ndarray:
         """
-        计算从图像到鸟瞰图的变换矩阵
-        
-        Args:
-            image_size: 输入图像大小 (height, width)
-            bev_size: 鸟瞰图大小 (height, width)
-            bev_range: 鸟瞰图范围 (x_min, x_max, y_min, y_max)
+            Compute the transformation matrix from the image to the BEV
+            
+            Args:
+                image_size: Input image size (height, width)
+                bev_size: BEV size (height, width)
+                bev_range: BEV range (x_min, x_max, y_min, y_max)
             
         Returns:
-            transform_matrix: 3x3变换矩阵
+            transform_matrix: 3x3 transformation matrix
         """
-        # 获取相机参数
+        # Get camera parameters
         fx = self.camera_matrix[0, 0]
         fy = self.camera_matrix[1, 1]
         cx = self.camera_matrix[0, 2]
         cy = self.camera_matrix[1, 2]
         
-        # 计算图像到地面的投影点
+        # Calculate projection point from image to ground
         ground_point = np.array([cx, cy + self.camera_height * fy, 1])
         
-        # 计算变换矩阵
+        # Calculate transformation matrix
         transform_matrix = np.array([
             [fx / self.camera_height, 0, -cx / self.camera_height],
             [0, fy / self.camera_height, -cy / self.camera_height],
@@ -55,14 +55,15 @@ class BEVTransformer:
                      bev_size: Tuple[int,int],
                      bev_range: Tuple[float,float,float,float]) -> np.ndarray:
         """
-        将地面点云投影到鸟瞰图（BEV）
+        Project the ground point cloud to the BEV (Bird's Eye View)
+        
         Args:
-            panorama: 原始全景图，用于采样颜色
-            points_2d: Nx4 数组 (X, Z, row, col)
-            bev_size: (width, height) 输出BEV图尺寸
-            bev_range: (x_min, x_max, z_min, z_max) 地面坐标范围，单位：米
+            panorama: Original panoramic image for color sampling
+            points_2d: Nx4 array (X, Z, row, col)
+            bev_size: (width, height) Output BEV image size
+            bev_range: (x_min, x_max, z_min, z_max) Ground coordinate range, unit: meters
         Returns:
-            bev_image: BEV鸟瞰图
+            bev_image: BEV Bird's Eye View image
         """
         bev_w, bev_h = bev_size
         x_min, x_max, z_min, z_max = bev_range
@@ -79,15 +80,15 @@ class BEVTransformer:
     def simple_projection(self, image: np.ndarray, bev_size: Tuple[int, int],
                          bev_range: Tuple[float, float, float, float]) -> np.ndarray:
         """
-        使用简单的投影方法生成鸟瞰图
+        Generate a Bird's Eye View (BEV) image using a simple projection method
         
         Args:
-            image: 输入图像
-            bev_size: 鸟瞰图大小 (width, height)
-            bev_range: 鸟瞰图范围 (x_min, x_max, y_min, y_max) 单位：米
+            image: Input image
+            bev_size: BEV size (width, height)
+            bev_range: BEV range (x_min, x_max, y_min, y_max) unit: meters
             
         Returns:
-            bev_image: 鸟瞰图
+            bev_image: BEV image
         """
         # 创建鸟瞰图画布
         bev_image = np.zeros((bev_size[1], bev_size[0], 3), dtype=np.uint8)
@@ -141,7 +142,7 @@ class BEVTransformer:
         y_coords = y_coords[valid_indices]
         
         if len(bev_x) == 0:
-            print("警告: 简单投影方法也没有点落在鸟瞰图范围内，尝试放宽范围")
+            print("Warning: Simple projection method also has no points within the BEV range, trying to expand the range")
             # 尝试放宽范围
             expanded_range = (
                 bev_range[0] - 5,  # 左侧扩展5米
@@ -166,7 +167,7 @@ class BEVTransformer:
             y_coords = y_coords[valid_indices]
             
             if len(bev_x) == 0:
-                print("错误: 无法生成有效的鸟瞰图")
+                print("Error: Unable to generate a valid BEV image")
                 # 返回一个带有网格的空白图像
                 bev_image = np.ones((bev_size[1], bev_size[0], 3), dtype=np.uint8) * 255
                 self._add_grid(bev_image)
@@ -192,11 +193,11 @@ class BEVTransformer:
         
     def _add_grid(self, image: np.ndarray, grid_size: int = 50):
         """
-        在图像上添加网格
+        Add a grid to the image
         
         Args:
-            image: 输入图像
-            grid_size: 网格大小（像素）
+            image: Input image
+            grid_size: Grid size (pixels)
         """
         h, w = image.shape[:2]
         
@@ -211,15 +212,15 @@ class BEVTransformer:
     def project_objects_to_bev(self, object_positions: dict, bev_size: tuple,
                              bev_range: tuple) -> dict:
         """
-        将3D对象位置投影到鸟瞰图坐标系
+        Project 3D object positions to the BEV coordinate system
         
         Args:
-            object_positions: 对象位置字典
-            bev_size: 鸟瞰图大小
-            bev_range: 鸟瞰图范围
+            object_positions: Object position dictionary
+            bev_size: BEV size
+            bev_range: BEV range
             
         Returns:
-            bev_positions: 鸟瞰图坐标系中的对象位置
+            bev_positions: Object positions in the BEV coordinate system
         """
         # 计算像素到米的转换比例
         x_scale = bev_size[0] / (bev_range[1] - bev_range[0])

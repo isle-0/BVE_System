@@ -18,7 +18,7 @@ The accuracy of this depth estimation step directly dictates the geometric fidel
 *   **Object Detection and Tracking:** 
 Object detection serves to identify and locate relevant entities within the scene, such as vehicles, pedestrians, cyclists, and traffic signs. This provides crucial semantic context to the geometric representation.
 
-This task is typically accomplished using deep learning-based object detectors. Models like YOLO (You Only Look Once), Faster R-CNN, or DETR are trained on extensive datasets (e.g., COCO, KITTI, nuScenes) annotated with bounding boxes and class labels for various object categories. This project employs YOLOv5, a popular choice known for its excellent balance of speed and accuracy, making it suitable for real-time or near-real-time applications. YOLOv5 is a single-stage detector featuring architectures like CSPDarknet as the backbone and PANet in the neck, offering various model sizes (n, s, m, l, x) to cater to different computational budgets.
+This task is typically accomplished using deep learning-based object detectors. Models like YOLO (You Only Look Once), Faster R-CNN, or DETR are trained on extensive datasets (e.g., COCO, KITTI, nuScenes) annotated with bounding boxes and class labels for various object categories. This project employs the Faster R-CNN model with ResNet-50 backbone and FPN, a popular choice known for its excellent balance of speed and accuracy, making it suitable for real-time or near-real-time applications.
 
 The output of the object detector (bounding boxes and class labels in the perspective view) is combined with the estimated depth information to project the detected objects onto the BEV map. This allows the system to represent not just the geometry of the scene but also the locations and types of dynamic and static objects within it, which is vital for tasks like collision avoidance, behavior prediction, and interaction planning. Performing detection in the perspective view leverages the high resolution and rich texture information available in the input image. However, the accuracy of the object's final position in the BEV map becomes dependent on the accuracy of the depth estimated for that object. An alternative architectural choice involves transforming image features to the BEV space first and then performing detection on the BEV feature map. This might offer better handling of perspective distortion and occlusion but could be affected by information loss or artifacts introduced during the view transformation process itself.
 
@@ -44,12 +44,12 @@ The system consists of the following core modules:
 
 2.  **Depth Estimation Module (`depth_estimation.py`)**
     *   Performs monocular depth estimation based on deep learning models.
-    *   Uses a pre-trained MiDaS model.
+    *   Uses a pre-trained DPT (Dense Prediction Transformer) model.
     *   Generates pixel-level depth maps.
     *   Supports visualization and post-processing of depth maps.
 
 3.  **Object Detection Module (`object_detection.py`)**
-    *   Uses the YOLOv5 model for object detection.
+    *   Uses the Faster R-CNN model with ResNet-50 backbone and FPN.
     *   Supports detection of multiple object categories (pedestrians, vehicles, etc.).
     *   Implements object tracking and ID assignment.
     *   Provides visualization of detection results.
@@ -95,7 +95,7 @@ pip install -r requirements.txt
     *   `--output_dir`: Directory for output results (required).
     *   `--camera_matrix`: Path to the camera intrinsic matrix file (optional).
     *   `--camera_height`: Camera installation height in meters (default: 1.5).
-    *   `--bev_range`: BEV range `[x_min x_max y_min y_max]` in meters (default: `[-2, 2, 0, 4]`).
+    *   `--bev_range`: BEV range `[x_min x_max z_min z_max]` in meters (default: `[-2, 2, -2, 2]`).
     *   `--debug`: Enable debug mode (optional).
 
 ## Project Structure
@@ -128,7 +128,7 @@ BEV_System/
 
 ### Depth Estimation
 
-*   Uses the MiDaS model for depth estimation.
+*   Uses the DPT (Dense Prediction Transformer) model for depth estimation.
 *   Supports selection from various pre-trained models.
 *   Provides post-processing and optimization for depth maps.
 
@@ -160,4 +160,3 @@ BEV_System/
 *   Optimization of depth estimation accuracy.
 *   Improvement of the BEV transformation algorithm.
 *   Addition of more visualization options.
-```

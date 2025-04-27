@@ -32,15 +32,15 @@ class ObjectDetector:
         
     def detect(self, image: np.ndarray) -> tuple:
         """
-        检测图像中的目标
+        Detect objects in the image
         
         Args:
-            image: 输入图像 (BGR格式)
+            image: Input image (BGR format)
             
         Returns:
-            boxes: 检测框坐标 [x1, y1, x2, y2]
-            labels: 类别标签
-            scores: 置信度分数
+            boxes: Detection bounding boxes [x1, y1, x2, y2]
+            labels: Category labels
+            scores: Confidence scores
         """
         # 转换为RGB格式
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -69,15 +69,15 @@ class ObjectDetector:
                           scores: np.ndarray, depth_map: np.ndarray,
                            camera_matrix: np.ndarray) -> dict:
         """
-        计算检测到的目标的3D位置
+        Calculate the 3D positions of detected objects
         
         Args:
-            boxes: 检测框坐标
-            depth_map: 深度图
-            camera_matrix: 相机内参矩阵
+            boxes: Detection bounding boxes
+            depth_map: Depth map
+            camera_matrix: Camera intrinsic matrix
             
         Returns:
-            object_positions: 包含目标类别和3D位置的字典
+            object_positions: Dictionary containing object categories and 3D positions
         """
         object_positions = {}
         
